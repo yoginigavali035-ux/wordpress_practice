@@ -1,0 +1,109 @@
+pipeline {
+    agent any
+
+    environment {
+        SSH_CRED = 'wordpress-key'
+        SERVER_IP = '172.31.17.31'
+        REMOTE_USER = 'ubuntu'
+
+        DB_NAME = 'wordpressdb'
+        DB_USER = 'wpuser'
+        DB_PASS = 'wppassword'
+    }
+
+    stages {
+
+        stage('Clone GitHub Repository') {
+            steps {
+                git branch: 'main',
+                url: 'https://github.com/yoginigavali035-ux/wordpress_practice.git'
+            }
+        }
+
+        stage('Install Apache, PHP, MySQL') {
+            steps {
+                sshagent(credentials: ["${SSH_CRED}"]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${SERVER_IP} '
+                        sudo yum update -y &&
+                        sudo yum install -y httpd php php-mysqlnd mysql-server wget unzip &&
+                        sudo systemctl start httpd &&
+                        sudo systemctl enable httpd &&
+                        sudo systemctl start mysqld &&
+                        sudo systemctl enable mysqld
+                    '
+                    """
+                }
+            }
+        }
+
+        stage('Create Database') {
+            steps {
+                sshagent(credentials: ["${SSH_CRED}"]) {
+                    sh """
+                    ssh ${REMOTE_USER}@${SERVER_IP} '
+                        sudo mysql -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};" &&
+                        sudo mysql -e "CREATE USER IF NOT EXISTS \\'${DB_USER}\\'@\\'localhost\\' IDENTIFIED BY \\'${DB_PASS}\\';" &&
+                        sudo mysql -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO \\'${DB_USER}\\'@\\'localhost\\';" &&
+                        sudo mysql -e "FLUSH PRIVILEGES;"
+                    '
+                    """
+                }
+            }
+        }
+
+        stage('Download WordPress') {
+            steps {
+                sshagent(credentials: ["${SSH_CRED}"]) {
+                    sh """
+                    ssh ${REMOTE_USER}@${SERVER_IP} '
+                        cd /var/www/html &&
+                        sudo rm -rf * &&
+                        sudo wget https://wordpress.org/latest.tar.gz &&
+                        sudo tar -xzf latest.tar.gz &&
+                        sudo chown -R apache:apache wordpress
+                    '
+                    """
+                }
+            }
+        }
+
+        stage('Configure WordPress') {
+            steps {
+                sshagent(credentials: ["${SSH_CRED}"]) {
+                    sh """
+                    ssh ${REMOTE_USER}@${SERVER_IP} '
+                        cd /var/www/html/wordpress &&
+                        sudo cp wp-config-sample.php wp-config.php &&
+                        sudo sed -i "s/database_name_here/${DB_NAME}/" wp-config.php &&
+                        sudo sed -i "s/username_here/${DB_USER}/" wp-config.php &&
+                        sudo sed -i "s/password_here/${DB_PASS}/" wp-config.php
+                    '
+                    """
+                }
+            }
+        }
+
+        stage('Deploy GitHub wp-content') {
+            steps {
+                sshagent(credentials: ["${SSH_CRED}"]) {
+                    sh """
+                    scp -o StrictHostKeyChecking=no -r wp-content ${REMOTE_USER}@${SERVER_IP}:/var/www/html/wordpress/
+                    """
+                }
+            }
+        }
+
+        stage('Restart Apache') {
+            steps {
+                sshagent(credentials: ["${SSH_CRED}"]) {
+                    sh """
+                    ssh ${REMOTE_USER}@${SERVER_IP} '
+                        sudo systemctl restart httpd
+                    '
+                    """
+                }
+            }
+        }
+    }
+}
