@@ -1,9 +1,10 @@
+
 pipeline {
     agent any
 
     environment {
-        SSH_CRED    = 'wordpress-key'
-        SERVER_IP   = '172.31.17.31'
+        SSH_CRED    = 'wordpress-app-key'
+        SERVER_IP   = '172.31.40.143'
         REMOTE_USER = 'ubuntu'
         WEB_DIR     = '/var/www/html'
 
