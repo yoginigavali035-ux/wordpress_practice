@@ -34,7 +34,7 @@ pipeline {
                         "
 
                         echo "Cleaning old website files..."
-                        ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${SERVER_IP}"
+                        ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${SERVER_IP} "
                             sudo rm -rf ${WEB_DIR}/*
                         "
 
